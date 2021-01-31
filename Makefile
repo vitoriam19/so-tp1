@@ -17,7 +17,7 @@ $(SRC_DIR)/utils.o: $(SRC_DIR)/utils.cpp
 	$(CC) $(FLAGS) -c $(SRC_DIR)/utils.cpp -o $(SRC_DIR)/utils.o
 
 run:
-	./tp.out
+	./tp.out ${ARGS}
 
 clean:
 	rm $(SRC_DIR)/threadManipulations.o

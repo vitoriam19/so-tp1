@@ -26,7 +26,9 @@ void *runRaj(void *);
 /**
  * Função que cria o array de threads e inicializa cada uma passando a função a ser executada como
  * parâmetro. Também instancia a classe Monitor a ser usada pelas threads.
+ * 
+ * @param {int} times - Número de vezes que cada personagem tentará usar o forno.
  */
-void createThreads();
+void createThreads(int times);
 
 #endif
