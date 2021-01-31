@@ -3,35 +3,30 @@
 
 #include <iostream>
 #include <vector>
+#include <pthread.h>
+#include <unistd.h>
 
 using namespace std;
 
 /**
- * Estrutura que vai representar os argumentos de uma thread (de um personagem)
- * @property {int} thread_id - representa o id identificador do personagem
- * @property {string} thread_characters_name - representa o nome do personagem que é representado por essa thread
+ * Função a ser executada por todos os personagens do problema, com exceção do Raj. Basicamente, o personagem vai
+ * tentar acessar o forno pelo número de vezes que é passado para ele. Após esquentar algo, vai comer e depois trabalhar.
+ * Cada uma dessas ações toma um tempo aleatório entre 3 e 6 segundos.
+ * 
+ * @param {void *} id - Inteiro que representa o identificador do personagem dessa thread.
  */
-typedef struct Thread_data {
-    int thread_id;
-    string thread_character_name;
-} thread_data;
+void *runThreads(void *id);
 
 /**
- * Função que inicializa e preenche uma thread data
- * @param {int} id - recebe o id da thread
- * @param {string} name - recebe o nome do personagem correspondente à thread
- */ 
-thread_data initializeThreadData (int id, string name);
+ * Função a ser executada pelo Raj. Basicamente, irá procurar por um deadlock de 5 em 5 segundos. Para tal, usará o método
+ * checkForDeadlock da classe Monitor.
+ */
+void *runRaj(void *);
 
 /**
- * Função que preenche o struct thread_data e cria a thread para cada personagem 
- * passando o struct como argumento para a função PrintHello
+ * Função que cria o array de threads e inicializa cada uma passando a função a ser executada como
+ * parâmetro. Também instancia a classe Monitor a ser usada pelas threads.
  */
 void createThreads();
 
-/**
- * Função que executa a thread printando o id e o nome - para testar 
- * @param {void} character - struct com os dados do personagem
- */
-void *PrintHello(void *character);
 #endif

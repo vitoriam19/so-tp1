@@ -1,51 +1,60 @@
 #include "../includes/threadManipulations.hpp"
-#include <pthread.h>
+#include "../includes/utils.hpp"
+#include "../includes/monitor.hpp"
 
-#define pb push_back
-#define NUM_THREADS 8 // Uma thread para cada personagem
+/**
+ * Instância global da classe monitor a ser usada pelas threads.
+ */
+Monitor *monitor;
 
-thread_data initializeThreadData(int id, string name){
-    thread_data character;
-    character.thread_id = id;
-    character.thread_character_name = name;
+void *runThreads(void *id) {
+  int characterId = (long int)id;
 
-    return character;
-}
+  monitor->getLock(characterId);
 
-void *PrintHello(void *character)
-{
-  thread_data * td;
-  td = (thread_data *) character;
-  int thread_id = td->thread_id;
-  string name = td->thread_character_name;
+  cout << getNameById(characterId) << " começa a esquentar algo" << endl;
+  usleep(1 * 1e6);
+  cout << getNameById(characterId) << " vai comer" << endl;
 
-  cout << "Sou eu, thread " << thread_id << " personagem " << name << endl;
+  monitor->unlock(characterId);
+
+  usleep(getAleatoryNumber(3,6) * 1e6);
+  cout << getNameById(characterId) << " voltou para o trabalho" << endl;
+  usleep(getAleatoryNumber(3,6) * 1e6);
+
   pthread_exit(NULL);
 }
 
-void createThreads(){
+void *runRaj(void *) {
+  //para checar a cada 5 segundos
+  usleep(5 * 1e6);
+  if(monitor->checkForDeadlock()){
+    cout << "Raj detectou um deadlock "<< endl;
+    monitor->setRajChoice(getAleatoryNumber(1,3));
+  }
+
+  pthread_exit(NULL);
+}
+
+void createThreads() {
+  monitor = new Monitor();
   pthread_t threads[NUM_THREADS];
-  vector<string> characters;
-  thread_data character;
-  int it, td;
+  int td;
 
-  characters.pb("Sheldon");
-  characters.push_back("Howard");
-  characters.push_back("Leonard");
-  characters.push_back("Stwart");
-  characters.push_back("Kripke");
-  characters.push_back("Amy");
-  characters.push_back("Bernadette");
-  characters.push_back("Penny");
-
-  for(it = 0; it < NUM_THREADS; it++){
-    character = initializeThreadData(it, characters[it]);
-    cout << "Cria thread " << it << " " << "que corresponde ao personagem: " << characters[it] << endl; 
-    td = pthread_create(&threads[it], NULL, PrintHello, (void *) &character);
+  // Cria threads de todos os 8 personagens, com exceção do Raj.
+  for(long int i=0;i<5;i++){
+    td = pthread_create(&threads[i], NULL, runThreads, (void *)i);
     if (td){
       printf("ERROR; return code from pthread_create() is %d\n", td);
       return;
     }
   }
+  // Cria thread do Raj
+  td = pthread_create(&threads[NUM_THREADS-1], NULL, runRaj, NULL);
+  if (td){
+    printf("ERROR; return code from pthread_create() is %d\n", td);
+    return;
+  }
+
   pthread_exit(NULL);
 }
