@@ -12,6 +12,16 @@ Monitor *monitor;
  */
 int timesToRun;
 
+/**
+ * Variável global que indica o número de threads que pararam de rodar.
+ */
+int stoppedThreads = 0;
+
+/**
+ * Mutex usado para alterarmos, sem condição de corrida, o valor da variável stoppedThreads.
+ */
+pthread_mutex_t stoppedThreadsMutex;
+
 void *runThreads(void *id) {
   int characterId = (long int)id;
 
@@ -29,12 +39,23 @@ void *runThreads(void *id) {
     usleep(getAleatoryNumber(3,6) * 1e6);
   }
 
+  pthread_mutex_lock(&stoppedThreadsMutex);
+  stoppedThreads++;
+  pthread_mutex_unlock(&stoppedThreadsMutex);
+
   pthread_exit(NULL);
 }
 
 void *runRaj(void *) {
-  // Raj vai checar de 5 em 5 segundos
-  for(int i=0;i<timesToRun;i++) {
+  while(1) {
+    pthread_mutex_lock(&stoppedThreadsMutex);
+    if(stoppedThreads == NUM_THREADS) {
+      // Se todas as threads já pararam de rodar, podemos parar Raj também
+      break;
+    }
+    pthread_mutex_unlock(&stoppedThreadsMutex);
+
+    // Raj vai checar por deadlocks de 5 em 5 segundos
     usleep(5 * 1e6);
     if(monitor->checkForDeadlock()) {
       int id = getAleatoryNumber(1,3);
@@ -52,8 +73,10 @@ void createThreads(int times) {
   pthread_t threads[NUM_THREADS];
   int td;
 
+  pthread_mutex_init(&stoppedThreadsMutex, NULL);
+
   // Cria threads de todos os 8 personagens, com exceção do Raj.
-  for(long int i=0;i<5;i++) {
+  for(long int i=0;i<8;i++) {
     td = pthread_create(&threads[i], NULL, runThreads, (void *)i);
     if (td) {
       printf("ERROR; return code from pthread_create() is %d\n", td);
