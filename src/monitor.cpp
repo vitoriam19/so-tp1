@@ -9,13 +9,13 @@ Monitor::Monitor() {
 
   pthread_mutex_init(&this->monitorMutex, NULL);
   pthread_mutex_init(&this->queueMutex, NULL);
-  pthread_mutex_init(&this->threadMutex, NULL);
   pthread_mutex_init(&this->waitingMutex, NULL);
 }
 
-/**
+/************************************************
  * Threads conditional variables methods
- */
+ ***********************************************/
+
 void Monitor::initializeConditions() {
   pthread_cond_init(&this->threadsCondition.c1, NULL);
   pthread_cond_init(&this->threadsCondition.c2, NULL);
@@ -87,9 +87,10 @@ void Monitor::signalCondition(int id) {
   pthread_mutex_unlock(&this->monitorMutex);
 }
 
-/**
- * Waiting Signal methods
- */
+/************************************************
+ * Waiting signal methods
+ ***********************************************/
+
 void Monitor::setWaitingSignal(int id){
   pthread_mutex_lock(&this->waitingMutex);
   cout << "estou aguardando " << getNameById(id) << endl;
@@ -104,9 +105,10 @@ void Monitor::unsetWaitingSignal(int id){
   pthread_mutex_unlock(&this->waitingMutex);
 }
 
-/**
- * Queue methods
- */
+/************************************************
+ * Queue Methods
+ ***********************************************/
+
 int Monitor::getQueueSize() {
   pthread_mutex_lock(&this->queueMutex);
   int size = this->queue.size();
@@ -145,9 +147,10 @@ int Monitor::queueGetFirstElement() {
   return first;
 }
 
-/**
- * General methods
- */
+/************************************************
+ * General Methods
+ ***********************************************/
+
 void Monitor::getLock(int id) {
   this->queuePushBackElement(id);
 

@@ -30,36 +30,141 @@ typedef struct conditions {
  */
 class Monitor {
   public:
+    /**
+     * Método que controla o acesso ao forno. Irá inserir o personagem que pediu acesso na fila de espera, e retirá-lo
+     * quando for selecionado.
+     * 
+     * @param {int} id - Identificador do personagem.
+     */
     void getLock(int id);
+
+    /**
+     * Método que libera o forno. Irá também chamar a função para calcular a próxima pessoa a ser selecionada para esquentar
+     * a comida.
+     *
+     * @param {int} id - Identificador do personagem.
+     */
     void unlock(int id);
+
+    /**
+     * Método chamado por Raj quando o mesmo detectou um deadlock.
+     * 
+     * @param {int} id - Identificador do personagem selecionado por Raj, randomicamente, para usar o forno.
+     */
     void setRajChoice(int id);
+
+    /**
+     * Método que calcula a próxima pessoa a utilizar o forno. Leva em conta todos os personagens na fila
+     * de espera.
+     */
     void calculateNextToUse();
+
+    /**
+     * Método que verifica se há deadlock na fila de espera.
+     */
     bool checkForDeadlock();
     Monitor();
 
   private:
+    /**
+     * Mutex usado para controlar acesso ao forno.
+     */
     pthread_mutex_t monitorMutex;
+
+    /**
+     * Mutex usado para controlar acesso à fila de espera. Duas ou mais threads não podem acessar esse
+     * espaço de memória ao mesmo tempo.
+     */
     pthread_mutex_t queueMutex;
-    pthread_mutex_t threadMutex;
+
+    /**
+     * Mutex usado para controlar acesso ao vetor de todas as threads esperando por um sinal para utilizar o forno.
+     */
     pthread_mutex_t waitingMutex;
     int rajChoice;
 
-    /* Threads conditional variables */
+    /************************************************
+     * Threads conditional variables
+     ***********************************************/
+
+    /**
+     * Variáveis de condição dos 8 personagens. Todos esperarão um sinal antes de começar a utilizar o forno.
+     */
     conditions threadsCondition;
+
+    /**
+     * Método de inicialização das variáveis de condição.
+     */
     void initializeConditions();
+
+    /**
+     * Método que irá aguardar por um sinal na variável de condição do personagem passado como parâmetro.
+     * 
+     * @param {int} id - Identificador do personagem.
+     */
     void waitCondition(int id);
+
+    /**
+     * Método que emitirá um sinal para a variável de condição do personagem passado como parâmetro.
+     * 
+     * @param {int} id - Identificador do personagem.
+     */
     void signalCondition(int id);
 
-    /* Queue */
+    /************************************************
+     * Queue
+     ***********************************************/
+    /**
+     * Fila de espera para utilizar o forno
+     */
     vector<int> queue;
+
+    /**
+     * Método que retorna o tamanho da fila da espera.
+     */
     int getQueueSize();
+
+    /**
+     * Método que retorna o primeiro elemento da fila da espera.
+     */
     int queueGetFirstElement();
+
+    /**
+     * Método que insere um elemento na fila da espera.
+     * 
+     * @param {int} id - Identificador do personagem.
+     */
     void queuePushBackElement(int id);
+
+    /**
+     * Método que remove o elemento passado como parâmetro da fila de espera.
+     * 
+     * @param {int} id - Identificador do personagem a ser removido da fila.
+     */
     void queueEraseElement(int id);
 
-    /* Waiting signal queue */
+    /************************************************
+     * Waiting signal queue
+     ***********************************************/
+    /**
+     * Vetor representando quais personagens estão esperando um sinal em sua variável de condição para
+     * começar a utilizar o forno. waitingSignal[i] = true se, e somente se, o personagem cujo identificado é i
+     * está esperando por um sinal de sua variável de condição.
+     */
     vector<bool> waitingSignal;
+
+    /**
+     * Método usado para definir que um personagem está esperando pelo sinal.
+     *
+     * @param {int} id - Identificador do personagem que está agora esperando pelo sinal.
+     */
     void setWaitingSignal(int id);
+
+    /**
+     * Método usado para definir que um personagem não está mais esperando pelo sinal.
+     * 
+     * @param {int} id - Identificador do personagem.
+     */
     void unsetWaitingSignal(int id);
 };
 
