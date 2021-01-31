@@ -27,10 +27,11 @@ void *runThreads(void *id) {
 
 void *runRaj(void *) {
   //para checar a cada 5 segundos
-  usleep(5 * 1e6);
+  usleep(1 * 1e6);
   if(monitor->checkForDeadlock()){
-    cout << "Raj detectou um deadlock "<< endl;
-    monitor->setRajChoice(getAleatoryNumber(1,3));
+    int id = getAleatoryNumber(1,3);
+    cout << "Raj detectou um deadlock, liberando " << getNameById(id) << endl;
+    monitor->setRajChoice(id);
   }
 
   pthread_exit(NULL);

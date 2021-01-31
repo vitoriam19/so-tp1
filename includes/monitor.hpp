@@ -81,12 +81,32 @@ class Monitor {
      * Mutex usado para controlar acesso ao vetor de todas as threads esperando por um sinal para utilizar o forno.
      */
     pthread_mutex_t waitingMutex;
+
+    /**
+     * Mutex usado para controlar acesso às variáveis relacionadas com o deadlock.
+     */
+    pthread_mutex_t deadlockMutex;
+
+    /**
+     * Variável de condição que será sinalizada quando Raj achar um deadlock. O sinal será aguardado no cálculo do próximo
+     * personagem a utilizar o forno.
+     */
+    pthread_cond_t deadlockConditional;
+
+    /**
+     * Escolha do Raj quando um deadlock for encontrado.
+     */
     int rajChoice;
+
+    /**
+     * Booleano que indica se a função que calcula o próximo personagem a usar o forno encontrou um deadlock e está esperando
+     * por um sinal de Raj.
+     */
+    bool isWaitingForDeadlockSignal;
 
     /************************************************
      * Threads conditional variables
      ***********************************************/
-
     /**
      * Variáveis de condição dos 8 personagens. Todos esperarão um sinal antes de começar a utilizar o forno.
      */
@@ -102,7 +122,7 @@ class Monitor {
      * 
      * @param {int} id - Identificador do personagem.
      */
-    void waitCondition(int id);
+    void waitSignal(int id);
 
     /**
      * Método que emitirá um sinal para a variável de condição do personagem passado como parâmetro.
@@ -166,6 +186,14 @@ class Monitor {
      * @param {int} id - Identificador do personagem.
      */
     void unsetWaitingSignal(int id);
+
+    /**
+     * Método que bloqueia a execução do código enquanto o personagem passado como parâmetro não estiver esperando
+     * por um sinal para usar o forno.
+     * 
+     * @param {int} id - Identificador do personagem.
+     */
+    void waitForIdListening(int id);
 };
 
 #endif

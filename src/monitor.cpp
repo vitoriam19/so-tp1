@@ -2,14 +2,17 @@
 #include "../includes/utils.hpp"
 
 Monitor::Monitor() {
-  this->rajChoice = -1;
   this->queue = vector<int>();
   this->waitingSignal = vector<bool>(NUM_THREADS - 1, false);
+  this->rajChoice = -1;
+  this->isWaitingForDeadlockSignal = false;
   this->initializeConditions();
 
   pthread_mutex_init(&this->monitorMutex, NULL);
   pthread_mutex_init(&this->queueMutex, NULL);
   pthread_mutex_init(&this->waitingMutex, NULL);
+  pthread_mutex_init(&this->deadlockMutex, NULL);
+  pthread_cond_init(&this->deadlockConditional, NULL);
 }
 
 /************************************************
@@ -27,7 +30,7 @@ void Monitor::initializeConditions() {
   pthread_cond_init(&this->threadsCondition.c8, NULL);
 }
 
-void Monitor::waitCondition(int id) {
+void Monitor::waitSignal(int id) {
   switch(id) {
     case 0:
       pthread_cond_wait(&this->threadsCondition.c1, &this->monitorMutex);
@@ -93,16 +96,32 @@ void Monitor::signalCondition(int id) {
 
 void Monitor::setWaitingSignal(int id){
   pthread_mutex_lock(&this->waitingMutex);
-  cout << "estou aguardando " << getNameById(id) << endl;
+  // cout << "estou aguardando " << getNameById(id) << endl;
   this->waitingSignal[id] = true;
   pthread_mutex_unlock(&this->waitingMutex);
+
+  return;
 }
 
 void Monitor::unsetWaitingSignal(int id){
   pthread_mutex_lock(&this->waitingMutex);
-  cout << "saí!!! " << getNameById(id) << endl;
+  // cout << "saí!!! " << getNameById(id) << endl;
   this->waitingSignal[id] = false;
   pthread_mutex_unlock(&this->waitingMutex);
+
+  return;
+}
+
+void Monitor::waitForIdListening(int id) {
+  while(true) {
+    pthread_mutex_lock(&this->waitingMutex);
+    bool isIdWaiting = this->waitingSignal[id];
+    pthread_mutex_unlock(&this->waitingMutex);
+
+    if (isIdWaiting) break;
+  }
+
+  return;
 }
 
 /************************************************
@@ -153,15 +172,24 @@ int Monitor::queueGetFirstElement() {
 
 void Monitor::getLock(int id) {
   this->queuePushBackElement(id);
+  int size = this->getQueueSize();
 
   pthread_mutex_lock(&this->monitorMutex);
-  // usleep(2000); // Easy way to create a deadlock
-  if (this->getQueueSize() > 1) {
+
+  // if (id == 3 || id == 4) {
+  //   this->queueEraseElement(id);
+
+  //   return;
+  // }
+  if (size > 1) {
+    /* Se temos mais de uma pessoa na fila, vamos esperar que o personagem atual seja escolhido pelo nosso algoritmo
+    de escolha. Isso será comunicado por um sinal na variável de condição. */
     this->setWaitingSignal(id);
-    this->waitCondition(id);
+    this->waitSignal(id);
     this->unsetWaitingSignal(id);
   }
 
+  // O personagem foi escolhido, podemos removê-lo da fila de espera.
   this->queueEraseElement(id);
 }
 
@@ -169,20 +197,26 @@ void Monitor::unlock(int id) {
   pthread_mutex_unlock(&this->monitorMutex);
 
   if (this->getQueueSize() >= 1) {
+    // Vamos calcular o próximo a utilizar somente se tivermos alguém na fila.
     this->calculateNextToUse();
   }
 }
 
 void Monitor::calculateNextToUse() {
-  if (this->rajChoice != -1) {
-    this->signalCondition(this->rajChoice);
-    this->rajChoice = -1;
-
-    return;
-  }
-
   if (this->checkForDeadlock()) {
-    cout << " deadlock found " << endl;
+    // Achamos um deadlock, vamos esperar para que o Raj escolha o próximo a esquentar a comida.
+
+    pthread_mutex_lock(&this->deadlockMutex);
+
+    // Sinalizamos que estamos esperando.
+    this->isWaitingForDeadlockSignal = true;
+    pthread_cond_wait(&this->deadlockConditional, &this->deadlockMutex);
+    pthread_mutex_unlock(&this->deadlockMutex);
+
+    /* Esperamos que o personagem escolhido por Raj esteja esperando um sinal na sua variável de condição para
+    entrar na fila. */
+    this->waitForIdListening(this->rajChoice);
+    this->signalCondition(this->rajChoice);
     return;
   }
 
@@ -192,22 +226,29 @@ void Monitor::calculateNextToUse() {
 
   int first = this->queueGetFirstElement();
 
-  while(true) {
-    pthread_mutex_lock(&this->waitingMutex);
-    bool element = this->waitingSignal[first];
-    pthread_mutex_unlock(&this->waitingMutex);
-
-    if (element) break;
-  }
-
-  cout << "o prox eh " << getNameById(first) << endl;
+  /* Esperamos que o personagem escolhido por nós esteja esperando um sinal na sua variável de condição para
+    entrar na fila. */
+  this->waitForIdListening(first);
+  // cout << "o prox eh " << getNameById(first) << endl;
   this->signalCondition(first);
 }
 
 void Monitor::setRajChoice(int id) {
-  cout << "liberando o " << getNameById(id) << endl; 
+  /* Antes de sinalizar que o Raj escolheu alguém, vamos esperar que a função que calcula o próximo a usar o forno
+  ache o deadlock e espere por uma solução para o mesmo. */
+  while(1) {
+    pthread_mutex_lock(&this->deadlockMutex);
+    if(this->isWaitingForDeadlockSignal) {
+      this->isWaitingForDeadlockSignal = false;
+      break;
+    }
+    pthread_mutex_unlock(&this->deadlockMutex);
+  }
+
+  // Setamos qual foi a escolha de Raj e sinalizamos que vamos liberar o deadlock.
   this->rajChoice = id;
-  // this->signalCondition(id);
+  pthread_cond_signal(&this->deadlockConditional);
+  pthread_mutex_unlock(&this->deadlockMutex);
 }
 
 bool Monitor::checkForDeadlock() {
