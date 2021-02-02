@@ -6,6 +6,7 @@ Monitor::Monitor() {
   this->waitingSignal = vector<bool>(NUM_THREADS - 1, false);
   this->rajChoice = -1;
   this->isWaitingForDeadlockSignal = false;
+  this->isOvenBusy = false;
   this->initializeConditions();
 
   pthread_mutex_init(&this->monitorMutex, NULL);
@@ -96,7 +97,6 @@ void Monitor::signalCondition(int id) {
 
 void Monitor::setWaitingSignal(int id){
   pthread_mutex_lock(&this->waitingMutex);
-  // cout << "estou aguardando " << getNameById(id) << endl;
   this->waitingSignal[id] = true;
   pthread_mutex_unlock(&this->waitingMutex);
 
@@ -105,7 +105,6 @@ void Monitor::setWaitingSignal(int id){
 
 void Monitor::unsetWaitingSignal(int id){
   pthread_mutex_lock(&this->waitingMutex);
-  // cout << "saí!!! " << getNameById(id) << endl;
   this->waitingSignal[id] = false;
   pthread_mutex_unlock(&this->waitingMutex);
 
@@ -136,13 +135,15 @@ int Monitor::getQueueSize() {
   return size;
 }
 
-void Monitor::queuePushBackElement(int id) {
+int Monitor::queuePushBackElement(int id) {
+  int queueSize;
   pthread_mutex_lock(&this->queueMutex);
-
   cout << getNameById(id) << " quer usar o forno" << endl;
-
   this->queue.push_back(id);
+  queueSize = this->queue.size();
   pthread_mutex_unlock(&this->queueMutex);
+
+  return queueSize;
 }
 
 void Monitor::queueEraseElement(int id) {
@@ -171,29 +172,29 @@ int Monitor::queueGetFirstElement() {
  ***********************************************/
 
 void Monitor::getLock(int id) {
-  this->queuePushBackElement(id);
-  int size = this->getQueueSize();
+  /* Vamos guardar a informação que diz se o forno estava ou não ocupado quando o personagem entrou na fila. Se sim, e a
+  fila estava vazia, então esse personagem deve passar direto e usar o forno. */
+  int size = this->queuePushBackElement(id);
+  bool wasOvenBusy = this->isOvenBusy;
 
   pthread_mutex_lock(&this->monitorMutex);
-
-  // if (id == 3 || id == 4) {
-  //   this->queueEraseElement(id);
-
-  //   return;
-  // }
-  if (size > 1) {
+  if (size > 1 || wasOvenBusy) {
     /* Se temos mais de uma pessoa na fila, vamos esperar que o personagem atual seja escolhido pelo nosso algoritmo
     de escolha. Isso será comunicado por um sinal na variável de condição. */
     this->setWaitingSignal(id);
     this->waitSignal(id);
-    this->unsetWaitingSignal(id);
   }
+
+  // Marcamos o forno como ocupado
+  this->isOvenBusy = true;
 
   // O personagem foi escolhido, podemos removê-lo da fila de espera.
   this->queueEraseElement(id);
 }
 
 void Monitor::unlock(int id) {
+  this->isOvenBusy = false;
+
   pthread_mutex_unlock(&this->monitorMutex);
 
   if (this->getQueueSize() >= 1) {
@@ -203,7 +204,7 @@ void Monitor::unlock(int id) {
 }
 
 void Monitor::calculateNextToUse() {
-  if (this->checkForDeadlock()) {
+  if (this->checkForDeadlock().size()) {
     // Achamos um deadlock, vamos esperar para que o Raj escolha o próximo a esquentar a comida.
 
     pthread_mutex_lock(&this->deadlockMutex);
@@ -213,24 +214,58 @@ void Monitor::calculateNextToUse() {
     pthread_cond_wait(&this->deadlockConditional, &this->deadlockMutex);
     pthread_mutex_unlock(&this->deadlockMutex);
 
-    /* Esperamos que o personagem escolhido por Raj esteja esperando um sinal na sua variável de condição para
-    entrar na fila. */
+    /* Esperamos que o personagem escolhido por Raj esteja esperando um sinal na sua variável de condição para entrar na fila. */
     this->waitForIdListening(this->rajChoice);
+    this->unsetWaitingSignal(this->rajChoice);
     this->signalCondition(this->rajChoice);
     return;
   }
 
+  vector<int> indexes(NUM_THREADS);
+  vector<pair<int,int> > couples;
+  map<int, int> frequence;
+
   pthread_mutex_lock(&this->queueMutex);
-  sort(this->queue.begin(), this->queue.end());
+  for(int i=0;i<this->queue.size();i++) {
+    int thread = this->queue[i];
+    indexes[thread] = i;
+    frequence[thread]++;
+  }
   pthread_mutex_unlock(&this->queueMutex);
+  
+  for(int x: {0, 2, 4}) {
+    if (frequence[x] && frequence[x + 1]) {
+      couples.push_back(make_pair(x, x+1));
+    }
+  }
 
-  int first = this->queueGetFirstElement();
+  int next;
+  if (!couples.size()) {
+    // Se não temos casais, podemos só ordenar a fila e pegar o primeiro elemento, aquele com maior prioridade (e menor id).
+    pthread_mutex_lock(&this->queueMutex);
+    sort(this->queue.begin(), this->queue.end());
+    pthread_mutex_unlock(&this->queueMutex);
 
-  /* Esperamos que o personagem escolhido por nós esteja esperando um sinal na sua variável de condição para
-    entrar na fila. */
-  this->waitForIdListening(first);
-  // cout << "o prox eh " << getNameById(first) << endl;
-  this->signalCondition(first);
+    next = this->queueGetFirstElement();
+  }
+
+  if (couples.size() == 1 || couples.size() == 2) {
+    /**
+     * - Se temos apenas um casal, eles irão vir na frente de todos da fila. O próximo a usar o forno é a parte do casal que chegou primeiro na fila.
+     * - Se temos dois casais, temos que decidir quem colocar. Nesse caso, o casal com o menor identificador vai ser selecionado, eles terão maior prioridade. * Por construção, o casal com menor id é aquele na primeira posição do vetor couples.
+     */
+
+    if (indexes[couples[0].first] < indexes[couples[0].second]) {
+      next = couples[0].first;
+    } else {
+      next = couples[0].second;
+    }
+  }
+
+  /* Esperamos que o personagem escolhido por nós esteja esperando um sinal na sua variável de condição para entrar na fila. */
+  this->waitForIdListening(next);
+  this->unsetWaitingSignal(next);
+  this->signalCondition(next);
 }
 
 void Monitor::setRajChoice(int id) {
@@ -251,18 +286,46 @@ void Monitor::setRajChoice(int id) {
   pthread_mutex_unlock(&this->deadlockMutex);
 }
 
-bool Monitor::checkForDeadlock() {
-  int hasDeadlock = 0;
+vector<int> Monitor::checkForDeadlock() {
+  int menInCycle = 0;
+  int womenInCycle = 0;
+  vector<int> deadlockParts;
 
   pthread_mutex_lock(&this->queueMutex);
   for(int i=0;i<this->queue.size();i++) {
     int thread = this->queue[i];
 
-    if(thread == 0 || thread == 1 || thread == 2) {
-      hasDeadlock++;
+    if(thread == 0 || thread == 2 || thread == 4) {
+      /* Incrementaremos essa variável sempre que vermos Sheldon, Horward ou Leonard na fila. Se o valor final dela for 3, por exemplo, sabemos que podemos ter um deadlock se as namoradas não estiverem presentes. */
+      menInCycle++;
+    }
+
+    if(thread == 1 || thread == 3 || thread == 5) {
+      /* Incrementaremos essa variável sempre que vermos Penny, Bernardette ou Amy na fila. Como, sozinhas, as namoradas respeitarão
+      as mesmas regras que seus respectivos namorados, caso estejam apenas elas na fila teremos um deadlock. */
+      womenInCycle++;
     }
   }
   pthread_mutex_unlock(&this->queueMutex);
 
-  return hasDeadlock == 3;
+  if (menInCycle == 3 && !womenInCycle) {
+    // Sheldon, Horward e Leonard na fila, sem nenhuma namorada.
+    deadlockParts.push_back(0);
+    deadlockParts.push_back(2);
+    deadlockParts.push_back(4);
+  }
+  if (womenInCycle == 3 && !menInCycle) {
+    // Penny, Bernardette e Amy na fila, sem nenhum namorado.
+    deadlockParts.push_back(1);
+    deadlockParts.push_back(3);
+    deadlockParts.push_back(5);
+  }
+  if (womenInCycle == 3 && menInCycle == 3) {
+    // Penny, Bernardette e Amy na fila, com todos os namorados. É como se tivéssemos somente os namorados. 
+    for(int x: {0, 1, 2, 3, 4, 5}) {
+      deadlockParts.push_back(x);
+    }
+  }
+
+  return deadlockParts;
 }

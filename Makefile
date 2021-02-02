@@ -1,7 +1,7 @@
 CC := g++
 SRC_DIR := src
 INC_DIR := includes
-FLAGS  := -Wall -Werror
+FLAGS  := -Wall -Werror -std=c++11
 all: tp.out
 
 tp.out:	$(SRC_DIR)/threadManipulations.o $(SRC_DIR)/monitor.o $(SRC_DIR)/utils.o

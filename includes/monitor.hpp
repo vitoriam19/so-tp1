@@ -4,6 +4,7 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
+#include <map>
 #include <pthread.h>
 #include <unistd.h>
 
@@ -62,7 +63,7 @@ class Monitor {
     /**
      * Método que verifica se há deadlock na fila de espera.
      */
-    bool checkForDeadlock();
+    vector<int> checkForDeadlock();
     Monitor();
 
   private:
@@ -103,6 +104,11 @@ class Monitor {
      * por um sinal de Raj.
      */
     bool isWaitingForDeadlockSignal;
+
+    /**
+     * Variável que diz se o forno está sendo utilizado por algum personagem.
+     */
+    bool isOvenBusy;
 
     /************************************************
      * Threads conditional variables
@@ -154,7 +160,7 @@ class Monitor {
      * 
      * @param {int} id - Identificador do personagem.
      */
-    void queuePushBackElement(int id);
+    int queuePushBackElement(int id);
 
     /**
      * Método que remove o elemento passado como parâmetro da fila de espera.

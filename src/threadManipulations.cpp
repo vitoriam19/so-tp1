@@ -49,7 +49,7 @@ void *runThreads(void *id) {
 void *runRaj(void *) {
   while(1) {
     pthread_mutex_lock(&stoppedThreadsMutex);
-    if(stoppedThreads == NUM_THREADS) {
+    if(stoppedThreads == (NUM_THREADS - 1)) {
       // Se todas as threads já pararam de rodar, podemos parar Raj também
       break;
     }
@@ -57,8 +57,10 @@ void *runRaj(void *) {
 
     // Raj vai checar por deadlocks de 5 em 5 segundos
     usleep(5 * 1e6);
-    if(monitor->checkForDeadlock()) {
-      int id = getAleatoryNumber(1,3);
+    vector<int> deadlockParts = monitor->checkForDeadlock();
+    if(deadlockParts.size()) {
+      int index = getAleatoryNumber(0, deadlockParts.size() - 1);
+      int id = deadlockParts[index];
       cout << "Raj detectou um deadlock, liberando " << getNameById(id) << endl;
       monitor->setRajChoice(id);
     }
@@ -83,6 +85,7 @@ void createThreads(int times) {
       return;
     }
   }
+
   // Cria thread do Raj
   td = pthread_create(&threads[NUM_THREADS-1], NULL, runRaj, NULL);
   if (td) {

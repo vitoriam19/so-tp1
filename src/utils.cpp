@@ -6,14 +6,14 @@ string getNameById(int id) {
   vector<string> characters;
 
   // Adiciona os personagens ao vetor
-  characters.pb("Sheldon");
-  characters.pb("Howard");
-  characters.pb("Leonard");
-  characters.pb("Stuart");
-  characters.pb("Kripke");
-  characters.pb("Amy");
-  characters.pb("Bernadette");
-  characters.pb("Penny");
+  characters.pb("Sheldon"); // 0
+  characters.pb("Amy"); // 1
+  characters.pb("Howard"); // 2
+  characters.pb("Bernadette"); // 3
+  characters.pb("Leonard"); // 4
+  characters.pb("Penny"); // 5
+  characters.pb("Stuart"); // 6
+  characters.pb("Kripke"); // 7
 
   // Retorna o personagem correspondente ao id
   return characters[id];
